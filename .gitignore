@@ -9,7 +9,7 @@ venv/
 env/
 
 # Project-generated data and database
-/data/power655.jsonl
+/data/*.jsonl
 /data/tracker.sqlite
 /data/tracker.sqlite-*
 

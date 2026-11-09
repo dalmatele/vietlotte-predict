@@ -1,8 +1,22 @@
-# Vietlott Power 6/55 Research Tool
+# Vietlott Lottery Research Tool
 
-Công cụ Python để phân tích dữ liệu Power 6/55, chạy backtest các cách chọn số,
-sinh bộ số tham khảo và theo dõi kết quả qua SQLite. Đây là công cụ nghiên cứu
-dữ liệu; kết quả quá khứ không dự đoán hay đảm bảo kết quả xổ số tương lai.
+Công cụ Python để cập nhật, phân tích dữ liệu, sinh vé tham khảo, backtest và
+theo dõi kết quả Vietlott. Dữ liệu được tách riêng theo game. Kết quả quá khứ
+không dự đoán hay đảm bảo kết quả xổ số tương lai; tool chưa tính tiền thưởng.
+
+## Các game hỗ trợ
+
+| Tên game | Giá trị `--game` | Dạng kết quả |
+|---|---|---|
+| Power 6/55 | `power655` (mặc định) | 6 số chính và 1 số đặc biệt |
+| Power 6/45 | `power645` | 6 số chính |
+| Power 5/35 | `power535` | 5 số chính và 1 số đặc biệt |
+| Keno | `keno` | 20 số được quay mỗi kỳ |
+| Max 3D | `3d` | Các dãy 3 chữ số theo hạng giải |
+| Max 3D Pro | `3d_pro` | Các dãy 3 chữ số theo hạng giải |
+
+Các lệnh hỗ trợ `--game`; nếu bỏ qua, tool dùng `power655`. Dữ liệu từ các
+game được lưu thành file riêng, không dùng chung bản ghi.
 
 ## Yêu cầu
 
@@ -53,7 +67,12 @@ Tải dữ liệu mới từ GitHub và chỉ nối các kỳ chưa có vào fil
 
 ```bash
 python main.py update
+python main.py update --game power645
+python main.py update --game keno
 ```
+
+Các mã game khác là `power535`, `3d` và `3d_pro`. Nguồn GitHub dùng file
+`data/<game>.jsonl` trong `vietvudanh/vietlott-data`.
 
 Nếu GitHub không có dữ liệu mới, có thể thử lấy kết quả mới nhất từ
 vietlott.vn:
@@ -62,9 +81,9 @@ vietlott.vn:
 python main.py update --try-vietlott
 ```
 
-Nguồn vietlott.vn có thể chặn truy cập tự động. Nếu cần, cài thêm
-`cloudscraper` và `beautifulsoup4`; nếu việc cập nhật online không thành công,
-có thể nhập kỳ quay thủ công:
+Fallback cào trực tiếp hiện chỉ hỗ trợ Power 6/55; trang Vietlott có thể chặn
+truy cập tự động. Nếu cần, cài thêm `cloudscraper` và `beautifulsoup4`. Có thể
+nhập kỳ quay thủ công cho mọi game:
 
 ```bash
 python main.py add-manual \
@@ -79,19 +98,45 @@ số đặc biệt thứ 7, được dùng để xét giải Jackpot 2 (khớp 5
 biệt); đây không phải số chính thứ 7. Ví dụ trên, `5,19,20,26,44,53` là 6 số
 chính và `12` là số đặc biệt.
 
-Ngày `--date` là tùy chọn; nếu bỏ qua, chương trình dùng ngày hiện tại. Các kỳ
-đã có cùng mã sẽ không được thêm lại. Lệnh `update` cập nhật file dữ liệu
-`data/power655.jsonl`; các lệnh phân tích và dự đoán sẽ sử dụng file này.
+Định dạng nhập tay theo từng game:
+
+```bash
+# Power 6/45: chỉ nhập 6 số chính, không có --special
+python main.py add-manual --game power645 --draw-id "00001" \
+  --numbers "1,5,12,20,33,44"
+
+# Power 5/35: 5 số chính và số đặc biệt
+python main.py add-manual --game power535 --draw-id "00001" \
+  --numbers "7,9,10,16,19" --special 9
+
+# Keno: nhập đủ 20 số được quay
+python main.py add-manual --game keno --draw-id "#0110271" \
+  --numbers "3,8,10,11,16,20,26,29,31,32,33,43,44,47,55,57,60,75,79,80"
+
+# Max 3D / Max 3D Pro: giữ số 0 ở đầu bằng chuỗi 3 ký tự
+python main.py add-manual --game 3d --draw-id "00001" \
+  --result-json '{"Giải Đặc biệt":["015","517"],"Giải Nhất":["334","279"]}'
+```
+
+Với Max 3D/Max 3D Pro, truyền kết quả dạng JSON object gồm tên hạng giải và
+danh sách các số trúng (mỗi số đúng 3 chữ số). `--date` tùy chọn; nếu bỏ qua,
+tool dùng ngày hiện tại. Mã kỳ đã tồn tại trong cùng game sẽ không được thêm
+lại. Đối với Power 5/35, số đặc biệt được quay từ miền riêng nên có thể trùng
+giá trị với một số chính.
 
 ### Phân tích dữ liệu
 
 ```bash
 python main.py analyze
+python main.py analyze --game power645
+python main.py analyze --game 3d_pro
 ```
 
-Lệnh in tần suất số chính/số đặc biệt, thống kê cặp và bộ ba, đồng thời tạo
-các biểu đồ `freq_main.png`, `freq_special.png` và `pair_heatmap.png` trong
-thư mục hiện tại. Có thể chỉ định thư mục đầu ra đã tồn tại:
+Power 6/55 in thống kê tần suất, cặp/bộ ba và tạo các biểu đồ
+`freq_main.png`, `freq_special.png`, `pair_heatmap.png`. Các game khác in tần
+suất theo cấu trúc dữ liệu game; Max 3D/Max 3D Pro thống kê dãy 3 chữ số và
+tần suất từng chữ số theo vị trí. Có thể chỉ định thư mục biểu đồ cho Power
+6/55:
 
 ```bash
 mkdir -p output
@@ -104,34 +149,42 @@ python main.py analyze --out output
 python main.py backtest
 ```
 
-Mặc định backtest từ kỳ có chỉ số 500, mỗi model sinh 10 vé và dùng seed 42.
-Có thể thay đổi các tham số:
+Power 6/55 chạy walk-forward với các model A/B/C/ngẫu nhiên. Các game khác
+hiện dùng model ngẫu nhiên làm đường cơ sở:
 
 ```bash
 python main.py backtest --start-idx 500 --tickets 10 --seed 42
+python main.py backtest --game keno --start-idx 500 --tickets 10 --pick-count 10
 ```
 
 `--start-idx` là chỉ số dòng trong dữ liệu đã sắp theo thời gian, bắt đầu từ 0.
-Thêm `--refresh` để tải lại file dữ liệu từ nguồn GitHub trước khi chạy. Khác
-với lệnh `update`, thao tác này thay file local bằng dữ liệu tải về, nên các kỳ
-chỉ được nhập thủ công có thể bị mất.
+`--pick-count` áp dụng cho Keno. Thêm `--refresh` để đồng bộ thêm các kỳ mới từ
+GitHub trước khi chạy.
 
 ### Sinh bộ số tham khảo
 
 ```bash
 python main.py predict
+python main.py predict --game power645
+python main.py predict --game keno --pick-count 10
+python main.py predict --game 3d_pro
 ```
 
-Lệnh tạo vé từ các model A, B, C và ngẫu nhiên (R), rồi lưu dự đoán vào cơ sở
-dữ liệu theo dõi. Tùy chọn:
+Power 6/55 dùng các model A, B, C và ngẫu nhiên (R). Các game khác sinh vé
+tham khảo theo tần suất dữ liệu đã thấy, lưu bằng model `frequency-random`.
+Với Keno có thể chọn số lượng số trong mỗi vé bằng `--pick-count`. Tất cả dự
+đoán được ghi vào SQLite cùng mã game.
 
 ```bash
 python main.py predict --tickets 10 --seed 42
-python main.py predict --tickets 5 --special 12 --draw-target "#01422"
+python main.py predict --tickets 5 --draw-target "#01422"
 ```
 
-`--special` và `--draw-target` là tùy chọn. Seed cố định giúp tái tạo cùng
-chuỗi kết quả khi dữ liệu và tham số không đổi.
+`--special` và `--draw-target` là tùy chọn với Power 6/55; Power 5/35 cũng
+nhận `--special` (nếu bỏ qua, tool chọn ngẫu nhiên một số đặc biệt). Seed cố
+định giúp tái tạo cùng chuỗi kết quả khi dữ liệu và tham số không đổi. Nếu
+chỉ định `--special` cho Power 6/55, số đó không được trùng số chính trong bất
+kỳ vé nào được sinh ra.
 
 ### Ghi kết quả thực tế và đối chiếu
 
@@ -148,31 +201,45 @@ python main.py record-result \
 Lệnh sẽ lưu kết quả và đối chiếu các dự đoán chưa được đánh giá với mã kỳ đó.
 Thay ví dụ trên bằng kết quả chính xác của kỳ quay.
 
+Chọn `--game` tương ứng. Power 6/45 và Keno không dùng `--special`; Keno nhập
+20 số qua `--numbers`. Với Max 3D/Max 3D Pro, dùng `--result-json` như ví dụ:
+
+```bash
+python main.py record-result --game 3d --draw-id "00001" \
+  --result-json '{"Giải Đặc biệt":["015","517"],"Giải Nhất":["334","279"]}'
+```
+
 Xem báo cáo hiệu suất đã paper-track:
 
 ```bash
 python main.py perf
+python main.py perf --game power645
 ```
 
 ## Dữ liệu và tệp được tạo
 
-- Dữ liệu đầu vào được tải tự động từ nguồn GitHub đã cấu hình trong
-  `config.py` và lưu tại `data/power655.jsonl`.
-- Dùng `python main.py update` để nối dữ liệu mới mà không ghi đè các kỳ đã có.
-- Dùng `--refresh` với `analyze`, `backtest` hoặc `predict` để tải lại và thay
-  thế file dữ liệu local bằng bản từ GitHub; dùng `update` để chỉ nối kỳ mới.
+- Dữ liệu được lấy từ GitHub theo game và lưu tại `data/<game>.jsonl`;
+  `update`/`--refresh` chỉ nối các kỳ chưa có, không ghi đè dữ liệu thủ công.
 - Dự đoán, kết quả và đánh giá được lưu tại `data/tracker.sqlite`.
-- Các biểu đồ được lưu ở thư mục làm việc hiện tại, hoặc thư mục truyền qua
+- Biểu đồ Power 6/55 lưu ở thư mục làm việc hiện tại hoặc thư mục truyền qua
   `analyze --out`.
 
 ## Cấu trúc chính
 
-- `main.py`: CLI và các lệnh `analyze`, `backtest`, `predict`,
+- `main.py`: CLI cho các game, các lệnh `analyze`, `backtest`, `predict`,
   `record-result`, `perf`, `update`, `add-manual`.
-- `updater.py`: cập nhật dữ liệu từ nguồn online hoặc nhập kỳ quay thủ công.
-- `data_loader.py`: tải, đọc và kiểm tra dữ liệu.
+- `games.py`: định nghĩa mã game và cấu trúc kết quả.
+- `game_data.py`: tải dữ liệu GitHub, kiểm tra schema, nhập tay và thống kê chung.
+- `updater.py`: fallback trực tiếp Vietlott cho Power 6/55.
+- `data_loader.py`: đọc và kiểm tra dữ liệu Power 6/55.
 - `analysis.py`: thống kê tần suất, cặp, bộ ba và giao nhau số.
 - `model.py`: các model sinh vé.
 - `backtest.py`: walk-forward backtest và tổng hợp kết quả.
 - `tracker.py`: lưu và đánh giá dự đoán bằng SQLite.
 - `charts.py`: xuất biểu đồ.
+
+Chạy kiểm tra tự động:
+
+```bash
+python -m unittest discover -s tests -v
+```
