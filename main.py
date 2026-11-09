@@ -1,6 +1,7 @@
 import argparse
 import json
 import random
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -15,7 +16,10 @@ from model import (
 )
 from backtest import walk_forward, summarize
 from charts import plot_freq_main, plot_freq_special, plot_pair_heatmap
-from tracker import init_db, save_prediction, save_result, evaluate_pending, performance_report
+from tracker import (
+    init_db, save_prediction, save_result, evaluate_pending, performance_report,
+    get_predictions,
+)
 from updater import update as updater_update, get_latest_local
 from games import get_game, game_choices
 from game_data import (
@@ -138,6 +142,13 @@ def cmd_backtest(args):
 
 
 def cmd_predict(args):
+    if args.draw_date:
+        try:
+            parsed_date = date.fromisoformat(args.draw_date)
+        except ValueError as exc:
+            raise ValueError("--draw-date phải có định dạng YYYY-MM-DD.") from exc
+        if parsed_date.isoformat() != args.draw_date:
+            raise ValueError("--draw-date phải có định dạng YYYY-MM-DD.")
     if args.game != "power655":
         _predict_other_game(args)
         return
@@ -174,6 +185,7 @@ def cmd_predict(args):
             draw_target=args.draw_target,
             meta={"n_train": len(df), "seed": args.seed, "tickets": args.tickets},
             game_id=args.game,
+            target_date=args.draw_date,
         )
         print(f"  saved prediction_id={pid}")
 
@@ -208,6 +220,49 @@ def cmd_record_result(args):
 
 def cmd_perf(args):
     performance_report(args.game)
+
+
+def cmd_predictions(args):
+    predictions = get_predictions(
+        game_id=args.game,
+        limit=args.limit,
+        prediction_id=args.id,
+    )
+    if not predictions:
+        print("Chưa có dự đoán phù hợp.")
+        return
+
+    for prediction in predictions:
+        game = get_game(prediction["game_id"])
+        print(
+            f"\nDự đoán #{prediction['id']} | {game.name} | "
+            f"{prediction['created_at']} | model {prediction['model']}"
+        )
+        print(f"Ngày dự đoán cho kỳ: {prediction['target_date'] or 'chưa ghi nhận'}")
+        print(f"Kỳ mục tiêu: {prediction['draw_target'] or 'chưa chỉ định'}")
+        for index, ticket in enumerate(prediction["tickets"], start=1):
+            line = f"  Vé {index}: {ticket}"
+            if prediction["special"] is not None:
+                line += f" + số đặc biệt {prediction['special']}"
+            print(line)
+        if not prediction["evaluations"]:
+            print("  Chưa có kết quả đối chiếu.")
+            continue
+        for evaluation in prediction["evaluations"]:
+            date_suffix = f" ({evaluation['date']})" if evaluation["date"] else ""
+            outcome = (
+                f"  Kết quả kỳ {evaluation['draw_id']}"
+                f"{date_suffix}: "
+                f"trúng nhiều nhất {evaluation['best_hit']}, "
+                f"tổng số trùng {evaluation['total_hits']}"
+            )
+            if game.special_max is not None:
+                outcome += (
+                    f", số đặc biệt {'trúng' if evaluation['matched_special'] else 'không trúng'}"
+                )
+            print(outcome)
+            if evaluation["result"] is not None:
+                print(f"  Kết quả thực tế: {evaluation['result']}")
 
 
 def _predict_other_game(args):
@@ -263,6 +318,7 @@ def _predict_other_game(args):
         draw_target=args.draw_target,
         meta={"seed": args.seed, "tickets": args.tickets},
         game_id=args.game,
+        target_date=args.draw_date,
     )
     print(f"Đã lưu prediction_id={prediction_id} ({game.name}).")
 
@@ -327,6 +383,7 @@ def build_parser():
     c.add_argument("--pick-count", type=int, default=10, help="Số lựa chọn mỗi vé Keno")
     c.add_argument("--special", type=int, default=None, help="Chọn số đặc biệt (nếu muốn)")
     c.add_argument("--draw-target", default=None, help="Mã kỳ dự đoán (vd #01422)")
+    c.add_argument("--draw-date", default=None, help="Ngày kỳ dự đoán, định dạng YYYY-MM-DD")
     c.add_argument("--seed", type=int, default=42)
     c.set_defaults(func=cmd_predict)
 
@@ -342,6 +399,12 @@ def build_parser():
     e = sub.add_parser("perf", help="Xem hiệu suất các model đã paper-track")
     e.add_argument("--game", choices=game_choices(), default="power655")
     e.set_defaults(func=cmd_perf)
+
+    h = sub.add_parser("predictions", help="Xem lại các vé đã dự đoán và kết quả đối chiếu")
+    h.add_argument("--game", choices=game_choices(), default=None, help="Lọc theo game")
+    h.add_argument("--id", type=int, default=None, help="Chỉ xem một prediction ID")
+    h.add_argument("--limit", type=int, default=20, help="Số dự đoán gần nhất (mặc định 20)")
+    h.set_defaults(func=cmd_predictions)
         
     u = sub.add_parser("update", help="Cập nhật dữ liệu từ GitHub/vietlott.vn")
     u.add_argument("--game", choices=game_choices(), default="power655")

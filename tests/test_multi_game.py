@@ -1,7 +1,9 @@
 import json
+import io
 import sqlite3
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -85,6 +87,7 @@ class TrackerTests(unittest.TestCase):
                         "SELECT result_json FROM game_results WHERE game_id = 'power655' AND draw_id = '001'"
                     ).fetchone()
                 self.assertIn("game_id", prediction_columns)
+                self.assertIn("target_date", prediction_columns)
                 self.assertEqual(migrated_result, ("[1,2,3,4,5,6]",))
 
     def test_game_results_evaluate_only_matching_game(self):
@@ -97,6 +100,7 @@ class TrackerTests(unittest.TestCase):
                     tickets=[[1, 2, 3, 4, 5, 6]],
                     special=7,
                     game_id="power655",
+                    target_date="2026-11-12",
                 )
                 tracker.save_result("001", "", [1, 2, 3, 4, 5, 6], 7)
                 self.assertEqual(tracker.evaluate_pending("001", "power655"), 1)
@@ -107,6 +111,17 @@ class TrackerTests(unittest.TestCase):
                     ).fetchone()
                 self.assertEqual(row, (6, 1))
                 tracker.performance_report("power655")
+                history = tracker.get_predictions(prediction_id=prediction_id)
+                self.assertEqual(history[0]["tickets"], [[1, 2, 3, 4, 5, 6]])
+                self.assertEqual(history[0]["target_date"], "2026-11-12")
+                self.assertEqual(history[0]["evaluations"][0]["result"], [1, 2, 3, 4, 5, 6, 7])
+                self.assertEqual(tracker.get_predictions(game_id="keno"), [])
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    main.cmd_predictions(
+                        SimpleNamespace(game="power655", limit=20, id=prediction_id)
+                    )
+                self.assertIn("Ngày dự đoán cho kỳ: 2026-11-12", output.getvalue())
 
     def test_digit_game_evaluation(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -159,6 +174,7 @@ class TrackerTests(unittest.TestCase):
                             seed=7,
                             special=None,
                             draw_target=None,
+                            draw_date=None,
                         )
                     )
                     main._backtest_other_game(

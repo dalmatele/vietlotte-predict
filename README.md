@@ -178,6 +178,7 @@ Với Keno có thể chọn số lượng số trong mỗi vé bằng `--pick-co
 ```bash
 python main.py predict --tickets 10 --seed 42
 python main.py predict --tickets 5 --draw-target "#01422"
+python main.py predict --draw-date "2026-11-12"
 ```
 
 `--special` và `--draw-target` là tùy chọn với Power 6/55; Power 5/35 cũng
@@ -185,6 +186,29 @@ nhận `--special` (nếu bỏ qua, tool chọn ngẫu nhiên một số đặc 
 định giúp tái tạo cùng chuỗi kết quả khi dữ liệu và tham số không đổi. Nếu
 chỉ định `--special` cho Power 6/55, số đó không được trùng số chính trong bất
 kỳ vé nào được sinh ra.
+`--draw-date` là ngày kỳ quay mà vé dự đoán dành cho, định dạng `YYYY-MM-DD`.
+Ngày này không được tự suy ra; nếu không truyền, lịch sử sẽ ghi “chưa ghi nhận”.
+
+### Xem lại dự đoán
+
+Xem 20 dự đoán gần nhất của tất cả game:
+
+```bash
+python main.py predictions
+```
+
+Lọc theo game, tăng số bản ghi, hoặc xem một prediction ID cụ thể:
+
+```bash
+python main.py predictions --game power655
+python main.py predictions --limit 50
+python main.py predictions --id 12
+```
+
+Lệnh hiển thị ngày tạo dự đoán, ngày kỳ quay dự đoán (nếu đã truyền
+`--draw-date`), game, model, kỳ mục tiêu, vé và kết quả đối chiếu (nếu đã ghi
+kết quả kỳ quay bằng `record-result`). Dự đoán cũ chưa lưu ngày mục tiêu sẽ
+hiển thị “chưa ghi nhận”.
 
 ### Ghi kết quả thực tế và đối chiếu
 
@@ -227,7 +251,7 @@ python main.py perf --game power645
 ## Cấu trúc chính
 
 - `main.py`: CLI cho các game, các lệnh `analyze`, `backtest`, `predict`,
-  `record-result`, `perf`, `update`, `add-manual`.
+  `predictions`, `record-result`, `perf`, `update`, `add-manual`.
 - `games.py`: định nghĩa mã game và cấu trúc kết quả.
 - `game_data.py`: tải dữ liệu GitHub, kiểm tra schema, nhập tay và thống kê chung.
 - `updater.py`: fallback trực tiếp Vietlott cho Power 6/55.

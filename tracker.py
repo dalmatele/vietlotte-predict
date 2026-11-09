@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
     draw_target TEXT,
+    target_date TEXT,
     game_id TEXT NOT NULL DEFAULT 'power655',
     model TEXT NOT NULL,
     tickets_json TEXT NOT NULL,
@@ -56,6 +57,8 @@ def init_db() -> None:
             con.execute(
                 "ALTER TABLE predictions ADD COLUMN game_id TEXT NOT NULL DEFAULT 'power655'"
             )
+        if "target_date" not in columns:
+            con.execute("ALTER TABLE predictions ADD COLUMN target_date TEXT")
         con.execute(
             "INSERT OR IGNORE INTO game_results (game_id, draw_id, date, result_json, special) "
             "SELECT 'power655', draw_id, date, main_json, special FROM results"
@@ -69,15 +72,17 @@ def save_prediction(
     draw_target: str | None = None,
     meta: dict | None = None,
     game_id: str = "power655",
+    target_date: str | None = None,
 ) -> int:
     init_db()
     with sqlite3.connect(DB_FILE) as con:
         cur = con.execute(
-            "INSERT INTO predictions (created_at, draw_target, game_id, model, tickets_json, special, meta_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO predictions (created_at, draw_target, target_date, game_id, model, tickets_json, special, meta_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 datetime.now(timezone.utc).isoformat(),
                 draw_target,
+                target_date,
                 game_id,
                 model,
                 json.dumps(tickets),
@@ -191,3 +196,66 @@ def performance_report(game_id: str = "power655") -> None:
             params=(game_id,),
         )
     print(df.round(4).to_string(index=False))
+
+
+def get_predictions(
+    game_id: str | None = None,
+    limit: int = 20,
+    prediction_id: int | None = None,
+) -> list[dict[str, Any]]:
+    if limit < 1:
+        raise ValueError("limit phải lớn hơn 0.")
+    if game_id is not None:
+        get_game(game_id)
+    init_db()
+
+    filters = []
+    params: list[Any] = []
+    if game_id is not None:
+        filters.append("game_id = ?")
+        params.append(game_id)
+    if prediction_id is not None:
+        filters.append("id = ?")
+        params.append(prediction_id)
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    params.append(1 if prediction_id is not None else limit)
+
+    with sqlite3.connect(DB_FILE) as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute(
+            "SELECT id, created_at, draw_target, target_date, game_id, model, tickets_json, special "
+            f"FROM predictions {where_clause} ORDER BY id DESC LIMIT ?",
+            params,
+        ).fetchall()
+        predictions = []
+        for row in rows:
+            evaluations = con.execute(
+                "SELECT e.draw_id, e.best_hit, e.total_hits, e.matched_special, "
+                "r.date, r.result_json "
+                "FROM evaluation e LEFT JOIN game_results r "
+                "ON r.game_id = ? AND r.draw_id = e.draw_id "
+                "WHERE e.prediction_id = ? ORDER BY e.evaluated_at",
+                (row["game_id"], row["id"]),
+            ).fetchall()
+            predictions.append({
+                "id": row["id"],
+                "created_at": row["created_at"],
+                "draw_target": row["draw_target"],
+                "target_date": row["target_date"],
+                "game_id": row["game_id"],
+                "model": row["model"],
+                "tickets": json.loads(row["tickets_json"]),
+                "special": row["special"],
+                "evaluations": [
+                    {
+                        "draw_id": item["draw_id"],
+                        "best_hit": item["best_hit"],
+                        "total_hits": item["total_hits"],
+                        "matched_special": item["matched_special"],
+                        "date": item["date"],
+                        "result": json.loads(item["result_json"]) if item["result_json"] else None,
+                    }
+                    for item in evaluations
+                ],
+            })
+        return predictions
