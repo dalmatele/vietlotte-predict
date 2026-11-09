@@ -74,6 +74,11 @@ python main.py add-manual \
   --date "2026-11-09"
 ```
 
+Trong Power 6/55, mỗi kỳ quay có 6 số chính và 1 số đặc biệt. `--special` là
+số đặc biệt thứ 7, được dùng để xét giải Jackpot 2 (khớp 5 số chính và số đặc
+biệt); đây không phải số chính thứ 7. Ví dụ trên, `5,19,20,26,44,53` là 6 số
+chính và `12` là số đặc biệt.
+
 Ngày `--date` là tùy chọn; nếu bỏ qua, chương trình dùng ngày hiện tại. Các kỳ
 đã có cùng mã sẽ không được thêm lại. Lệnh `update` cập nhật file dữ liệu
 `data/power655.jsonl`; các lệnh phân tích và dự đoán sẽ sử dụng file này.
