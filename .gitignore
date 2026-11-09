@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Project-generated data and database
+/data/power655.jsonl
+/data/tracker.sqlite
+/data/tracker.sqlite-*
+
+# Generated charts
+/freq_main.png
+/freq_special.png
+/pair_heatmap.png
+
+# Local environment and editor files
+.env
+.DS_Store
+.vscode/
