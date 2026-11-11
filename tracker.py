@@ -259,3 +259,38 @@ def get_predictions(
                 ],
             })
         return predictions
+
+
+def delete_prediction(prediction_id: int) -> bool:
+    deleted, _ = delete_predictions([prediction_id])
+    return bool(deleted)
+
+
+def delete_predictions(prediction_ids: list[int]) -> tuple[list[int], list[int]]:
+    prediction_ids = list(dict.fromkeys(prediction_ids))
+    if not prediction_ids:
+        return [], []
+
+    init_db()
+    with sqlite3.connect(DB_FILE) as con:
+        placeholders = ", ".join("?" for _ in prediction_ids)
+        rows = con.execute(
+            f"SELECT id FROM predictions WHERE id IN ({placeholders})",
+            prediction_ids,
+        ).fetchall()
+        deleted_ids = {row[0] for row in rows}
+        missing_ids = [item for item in prediction_ids if item not in deleted_ids]
+        if not deleted_ids:
+            return [], missing_ids
+
+        deleted = [item for item in prediction_ids if item in deleted_ids]
+        deleted_placeholders = ", ".join("?" for _ in deleted)
+        con.execute(
+            f"DELETE FROM evaluation WHERE prediction_id IN ({deleted_placeholders})",
+            deleted,
+        )
+        con.execute(
+            f"DELETE FROM predictions WHERE id IN ({deleted_placeholders})",
+            deleted,
+        )
+        return deleted, missing_ids

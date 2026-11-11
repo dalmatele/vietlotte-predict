@@ -149,7 +149,9 @@ python main.py analyze --out output
 python main.py backtest
 ```
 
-Power 6/55 chạy walk-forward với các model A/B/C/ngẫu nhiên. Các game khác
+Power 6/55 chạy walk-forward với các model A/B/C, D và ngẫu nhiên. Model D
+chọn số xuất hiện nhiều nhất làm số khởi đầu, sau đó sinh từng số tiếp theo
+dựa trên xác suất đồng xuất hiện có làm trơn với số vừa chọn. Các game số khác
 hiện dùng model ngẫu nhiên làm đường cơ sở:
 
 ```bash
@@ -170,16 +172,41 @@ python main.py predict --game keno --pick-count 10
 python main.py predict --game 3d_pro
 ```
 
-Power 6/55 dùng các model A, B, C và ngẫu nhiên (R). Các game khác sinh vé
-tham khảo theo tần suất dữ liệu đã thấy, lưu bằng model `frequency-random`.
-Với Keno có thể chọn số lượng số trong mỗi vé bằng `--pick-count`. Tất cả dự
-đoán được ghi vào SQLite cùng mã game.
+Power 6/55 dùng các model A, B, C, D và ngẫu nhiên (R). Các game số
+(Power 6/45, Power 5/35, Keno) cũng tạo thêm vé model D bên cạnh vé
+`frequency-random`; Max 3D/Max 3D Pro tiếp tục dùng cách sinh theo tần suất
+hiện có. Với Keno có thể chọn số lượng số trong mỗi vé bằng `--pick-count`.
+Tất cả dự đoán được ghi vào SQLite cùng mã game.
+
+Model D bắt đầu từ số có tần suất cao nhất trong miền số của game (nếu hòa,
+chọn ngẫu nhiên trong các số đồng hạng). Mỗi số sau được lấy theo xác suất có
+điều kiện xuất hiện cùng kỳ với số vừa được chọn; xác suất được làm trơn để
+tránh các cặp ít gặp nhận trọng số bằng 0. Đây là quan hệ đồng xuất hiện trong
+cùng một kỳ, không phải dự báo rằng kỳ quay kế tiếp có quan hệ thời gian với
+kỳ trước. Model D là lựa chọn bổ sung và không thay đổi các model hiện có.
 
 ```bash
 python main.py predict --tickets 10 --seed 42
 python main.py predict --tickets 5 --draw-target "#01422"
 python main.py predict --draw-date "2026-11-12"
 ```
+
+Chọn model bằng `--models` (hoặc `--model`). Ví dụ chỉ sinh bằng Model D:
+
+```bash
+python main.py predict --models D
+```
+
+Có thể chọn nhiều model; với Power 6/55, các lựa chọn là `A`, `B`, `C`, `D`
+và `R`:
+
+```bash
+python main.py predict --models D R
+```
+
+Nếu không truyền tùy chọn này, tool vẫn dùng tất cả model mặc định phù hợp với
+game đã chọn. Max 3D/Max 3D Pro hiện chỉ hỗ trợ `frequency-random`; các game
+số còn lại hỗ trợ `frequency-random` và `D`.
 
 `--special` và `--draw-target` là tùy chọn với Power 6/55; Power 5/35 cũng
 nhận `--special` (nếu bỏ qua, tool chọn ngẫu nhiên một số đặc biệt). Seed cố
@@ -203,12 +230,35 @@ Lọc theo game, tăng số bản ghi, hoặc xem một prediction ID cụ thể
 python main.py predictions --game power655
 python main.py predictions --limit 50
 python main.py predictions --id 12
+python main.py predictions --list
 ```
+
+Thêm `--list` để chỉ hiện ID, kỳ mục tiêu, game, model và số trúng cao nhất
+của một vé khi có kết quả đối chiếu. Kỳ mục tiêu hiển thị mã kỳ và ngày quay
+nếu tìm thấy kết quả. Kết quả được lấy từ database, hoặc từ JSONL nếu chưa có
+đối chiếu trong database. Dấu `-` ở cột số trúng nghĩa là chưa có kết quả để
+so sánh. Có thể kết hợp với `--game` hoặc `--limit`.
 
 Lệnh hiển thị ngày tạo dự đoán, ngày kỳ quay dự đoán (nếu đã truyền
 `--draw-date`), game, model, kỳ mục tiêu, vé và kết quả đối chiếu (nếu đã ghi
-kết quả kỳ quay bằng `record-result`). Dự đoán cũ chưa lưu ngày mục tiêu sẽ
-hiển thị “chưa ghi nhận”.
+kết quả kỳ quay bằng `record-result`). Nếu chưa ghi kết quả vào database, lệnh
+sẽ tự tìm trong file `data/<game>.jsonl`: ưu tiên khớp mã kỳ, sau đó ngày mục
+tiêu chính xác. Nếu có `--draw-date` nhưng không tìm thấy kết quả đúng ngày,
+lệnh chọn kỳ gần nhất sau ngày mục tiêu. Nếu không chỉ định `--draw-date`, dùng
+ngày tạo dự đoán làm mốc và chọn kỳ gần nhất trước hoặc đúng ngày đó. Kỳ được
+suy ra sẽ hiển thị mã kỳ/ngày quay và được dùng để tính số trúng.
+
+Nếu không muốn tiếp tục theo dõi một dự đoán, lấy ID bằng `predictions`, sau
+đó xóa đúng dự đoán đó:
+
+```bash
+python main.py delete-prediction --id 12
+python main.py delete-prediction --ids 12 13 14
+```
+
+Có thể xóa một ID bằng `--id` hoặc nhiều ID bằng `--ids` (cũng có thể truyền
+nhiều giá trị sau `--id`). Lệnh xóa dự đoán và các lần đối chiếu gắn với chúng;
+kết quả kỳ quay đã lưu vẫn được giữ lại. ID không tồn tại sẽ được báo riêng.
 
 ### Ghi kết quả thực tế và đối chiếu
 
@@ -251,7 +301,8 @@ python main.py perf --game power645
 ## Cấu trúc chính
 
 - `main.py`: CLI cho các game, các lệnh `analyze`, `backtest`, `predict`,
-  `predictions`, `record-result`, `perf`, `update`, `add-manual`.
+  `predictions`, `delete-prediction`, `record-result`, `perf`, `update`,
+  `add-manual`.
 - `games.py`: định nghĩa mã game và cấu trúc kết quả.
 - `game_data.py`: tải dữ liệu GitHub, kiểm tra schema, nhập tay và thống kê chung.
 - `updater.py`: fallback trực tiếp Vietlott cho Power 6/55.

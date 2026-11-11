@@ -9,9 +9,10 @@ from model import (
     model_A_candidates,
     model_B_candidates,
     model_C_candidates,
+    model_D_candidates,
     model_random_candidates,
 )
-from config import N_MAIN
+from config import N_MAIN, MAX_NUMBER
 
 
 def _matches(ticket: list[int], actual: set[int]) -> int:
@@ -23,7 +24,7 @@ def walk_forward(
     start_idx: int = 500,
     n_tickets: int = 10,
     seed: int = 42,
-    models: tuple[str, ...] = ("A", "B", "C", "R"),
+    models: tuple[str, ...] = ("A", "B", "C", "R", "D"),
 ) -> dict[str, dict]:
     """
     Với mỗi kỳ i từ start_idx..len(df)-1:
@@ -33,6 +34,7 @@ def walk_forward(
     Trả về dict model -> metrics
     """
     rng = random.Random(seed)
+    relational_rng = random.Random(seed + 1)
     results = {m: {"best_max": [], "hits": [], "total_hits": [], "distinct": []} for m in models}
 
     # cache stats mỗi khi refit (refit mỗi 50 kỳ để đỡ chậm)
@@ -45,7 +47,11 @@ def walk_forward(
             f = freq_main(train)
             ps = pair_stats(train)
             score = build_pair_score(ps, alpha=5.0)
-            cached = {"freq": f, "pair_score": score}
+            cached = {
+                "freq": f,
+                "pair_score": score,
+                "draws": train[[f"m{j+1}" for j in range(N_MAIN)]].values.tolist(),
+            }
 
         f = cached["freq"]
         score = cached["pair_score"]
@@ -59,6 +65,14 @@ def walk_forward(
                 tickets = model_B_candidates(f, score, n_tickets, rng)
             elif m == "C":
                 tickets = model_C_candidates(f, score, n_tickets, rng)
+            elif m == "D":
+                tickets = model_D_candidates(
+                    draws=cached["draws"],
+                    number_pool=range(1, MAX_NUMBER + 1),
+                    picks_per_ticket=N_MAIN,
+                    n_tickets=n_tickets,
+                    rng=relational_rng,
+                )
             else:
                 tickets = model_random_candidates(n_tickets, rng)
 
